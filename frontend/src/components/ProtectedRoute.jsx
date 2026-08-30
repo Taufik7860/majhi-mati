@@ -8,51 +8,68 @@ export default function ProtectedRoute({ allowedRole }) {
   const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     const checkAuth = async () => {
       try {
-        // 1. Supabase Session Check
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        // 2. Local Storage Backup Check
+        // 1. Read Local Storage Session
         const localUserData = localStorage.getItem('user');
         const localUser = localUserData ? JSON.parse(localUserData) : null;
 
+        // 2. Check Supabase Auth Session
+        const { data: { session } } = await supabase.auth.getSession();
+
         if (!session && !localUser) {
-          setAuthenticated(false);
-          setLoading(false);
+          if (isMounted) {
+            setAuthenticated(false);
+            setLoading(false);
+          }
           return;
         }
 
-        // Determine user role
         const activeRole = localUser?.role || 'citizen';
-        
-        setAuthenticated(true);
-        setUserRole(activeRole);
+
+        if (isMounted) {
+          setAuthenticated(true);
+          setUserRole(activeRole);
+          setLoading(false);
+        }
       } catch (err) {
-        console.error("Auth verification error:", err);
-        setAuthenticated(false);
-      } finally {
-        setLoading(false);
+        console.error("Auth Check Error:", err);
+        if (isMounted) {
+          setAuthenticated(false);
+          setLoading(false);
+        }
       }
     };
 
     checkAuth();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#0f2b48' }}>
-        <h2>सत्यापन होत आहे... (Verifying Session...)</h2>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        backgroundColor: '#f8fafc',
+        fontFamily: 'sans-serif',
+        color: '#0f2b48'
+      }}>
+        <h2>सत्यापन होत आहे... (Loading...)</h2>
       </div>
     );
   }
 
-  // Not logged in -> Redirect to Login Page
   if (!authenticated) {
     return <Navigate to="/" replace />;
   }
 
-  // Role Mismatch -> Redirect to respective dashboard
   if (allowedRole && allowedRole !== userRole) {
     return userRole === 'officer' 
       ? <Navigate to="/officer/dashboard" replace /> 

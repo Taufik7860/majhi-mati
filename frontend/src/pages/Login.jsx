@@ -8,6 +8,8 @@ import {
   Landmark,
   Users,
   FileCheck2,
+  MoonStar,
+  SunMedium,
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
@@ -28,8 +30,18 @@ const OFFICER_ROLES = [
    LOGIN COMPONENT
 ===================================================== */
 
-export default function Login() {
+export default function Login({ isDark = false, onToggleTheme }) {
   const navigate = useNavigate();
+
+  const [language, setLanguage] = useState(() => {
+    if (typeof window === "undefined") return "mr";
+    return localStorage.getItem("appLanguage") || "mr";
+  });
+
+  const [showLanguagePicker, setShowLanguagePicker] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !localStorage.getItem("appLanguage");
+  });
 
   const [role, setRole] = useState("user");
   const [showPassword, setShowPassword] = useState(false);
@@ -42,6 +54,91 @@ export default function Login() {
   // Authentication State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const isEnglish = language === "en";
+
+  const labels = {
+    mr: {
+      gov: "महाराष्ट्र शासन",
+      council: "Kopargaon Municipal Council",
+      title: "सुरक्षित लॉगिन",
+      subtitle: "विकास निरीक्षण पोर्टल",
+      roleLabel: "लॉगिन प्रकार निवडा",
+      citizen: "नागरिक",
+      citizenSub: "User / Citizen",
+      officer: "अधिकारी",
+      officerSub: "Municipal Officer",
+      formHeadingCitizen: "नागरिक खात्यात लॉगिन करा",
+      formHeadingOfficer: "अधिकारी खात्यात लॉगिन करा",
+      emailCitizen: "नागरिक ईमेल",
+      emailOfficer: "अधिकारी ईमेल",
+      password: "पासवर्ड",
+      remember: "मला लक्षात ठेवा",
+      forgot: "पासवर्ड विसरलात?",
+      loginCitizen: "नागरिक लॉगिन",
+      loginOfficer: "अधिकारी लॉगिन",
+      loginLoading: "प्रक्रिया सुरू आहे...",
+      registerText: "नवीन नागरिक खाते?",
+      registerLink: "नोंदणी करा",
+      securityText: "अधिकृत नगरपालिका अधिकारींसाठी",
+      secure: "सुरक्षित आणि संरक्षित लॉगिन",
+      featureTitle: "माझी माती",
+      featureSub: "पारदर्शक विकासासाठी डिजिटल व्यासपीठ",
+      feature1: "विकास निरीक्षण",
+      feature1Sub: "Phase-wise Monitoring",
+      feature2: "शासन पारदर्शकता",
+      feature2Sub: "Governance Transparency",
+      feature3: "नागरिक सहभाग",
+      feature3Sub: "Citizen Participation",
+      feature4: "उत्तरदायित्व",
+      feature4Sub: "Accountability",
+      footer: "माझं शहर • माझी जबाबदारी • माझा विकास",
+      footer2: "SKH012 • Development Monitoring & Governance System",
+    },
+    en: {
+      gov: "Government of Maharashtra",
+      council: "Kopargaon Municipal Council",
+      title: "Secure Login",
+      subtitle: "Development Monitoring Portal",
+      roleLabel: "Select Login Type",
+      citizen: "Citizen",
+      citizenSub: "User / Citizen",
+      officer: "Officer",
+      officerSub: "Municipal Officer",
+      formHeadingCitizen: "Login to Citizen Account",
+      formHeadingOfficer: "Login to Officer Account",
+      emailCitizen: "Citizen Email",
+      emailOfficer: "Officer Email",
+      password: "Password",
+      remember: "Remember me",
+      forgot: "Forgot password?",
+      loginCitizen: "Citizen Login",
+      loginOfficer: "Officer Login",
+      loginLoading: "Processing...",
+      registerText: "New citizen account?",
+      registerLink: "Register",
+      securityText: "For authorised municipal officers",
+      secure: "Secure and protected login",
+      featureTitle: "Majhi Mati",
+      featureSub: "Digital platform for transparent development",
+      feature1: "Project Monitoring",
+      feature1Sub: "Phase-wise Monitoring",
+      feature2: "Governance Transparency",
+      feature2Sub: "Governance Transparency",
+      feature3: "Citizen Participation",
+      feature3Sub: "Citizen Participation",
+      feature4: "Accountability",
+      feature4Sub: "Accountability",
+      footer: "My City • My Responsibility • My Development",
+      footer2: "SKH012 • Development Monitoring & Governance System",
+    },
+  };
+
+  const handleLanguageSelect = (selectedLanguage) => {
+    setLanguage(selectedLanguage);
+    localStorage.setItem("appLanguage", selectedLanguage);
+    setShowLanguagePicker(false);
+  };
 
   /* =====================================================
       SUPABASE LOGIN
@@ -332,7 +429,22 @@ export default function Login() {
   ===================================================== */
 
   return (
-    <main className="login-page">
+    <main className={`login-page ${isDark ? "dark" : ""}`}>
+      {showLanguagePicker && (
+        <div className="language-overlay">
+          <div className="language-modal">
+            <div className="language-title">Choose Language / भाषा निवडा</div>
+            <div className="language-buttons">
+              <button type="button" className="language-btn" onClick={() => handleLanguageSelect("mr")}>
+                मराठी
+              </button>
+              <button type="button" className="language-btn language-btn-secondary" onClick={() => handleLanguageSelect("en")}>
+                English
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =========================================
           TOP GOVERNMENT BAR
@@ -341,12 +453,22 @@ export default function Login() {
       <header className="top-bar">
 
         <div className="top-left">
-          महाराष्ट्र शासन
+          {labels[language].gov}
         </div>
 
         <div className="top-right">
-          Kopargaon Municipal Council
+          {labels[language].council}
         </div>
+
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={onToggleTheme}
+          aria-label={isDark ? "Switch to bright mode" : "Switch to dark mode"}
+        >
+          {isDark ? <SunMedium size={16} /> : <MoonStar size={16} />}
+          <span>{isDark ? "Bright" : "Dark"}</span>
+        </button>
 
       </header>
 
@@ -404,12 +526,12 @@ export default function Login() {
           {/* TITLE */}
 
           <div className="login-card-title">
-            सुरक्षित लॉगिन
+            {labels[language].title}
           </div>
 
 
           <div className="login-card-subtitle">
-            विकास निरीक्षण पोर्टल
+            {labels[language].subtitle}
           </div>
 
 
@@ -418,7 +540,7 @@ export default function Login() {
           ================================= */}
 
           <div className="role-label">
-            लॉगिन प्रकार निवडा
+            {labels[language].roleLabel}
           </div>
 
 
@@ -450,11 +572,11 @@ export default function Login() {
               <span className="role-content">
 
                 <strong>
-                  नागरिक
+                  {labels[language].citizen}
                 </strong>
 
                 <small>
-                  User / Citizen
+                  {labels[language].citizenSub}
                 </small>
 
               </span>
@@ -489,11 +611,11 @@ export default function Login() {
               <span className="role-content">
 
                 <strong>
-                  अधिकारी
+                  {labels[language].officer}
                 </strong>
 
                 <small>
-                  Municipal Officer
+                  {labels[language].officerSub}
                 </small>
 
               </span>
@@ -515,8 +637,8 @@ export default function Login() {
             <h2 className="form-heading">
 
               {role === "user"
-                ? "नागरिक खात्यात लॉगिन करा"
-                : "अधिकारी खात्यात लॉगिन करा"}
+                ? labels[language].formHeadingCitizen
+                : labels[language].formHeadingOfficer}
 
             </h2>
 
@@ -556,8 +678,8 @@ export default function Login() {
                 }
                 placeholder={
                   role === "user"
-                    ? "नागरिक ईमेल"
-                    : "अधिकारी ईमेल"
+                    ? labels[language].emailCitizen
+                    : labels[language].emailOfficer
                 }
                 autoComplete="email"
               />
@@ -584,7 +706,7 @@ export default function Login() {
                 onChange={(e) =>
                   setPassword(e.target.value)
                 }
-                placeholder="पासवर्ड"
+                placeholder={labels[language].password}
                 autoComplete="current-password"
               />
 
@@ -640,7 +762,7 @@ export default function Login() {
                 />
 
                 <span>
-                  मला लक्षात ठेवा
+                  {labels[language].remember}
                 </span>
 
               </label>
@@ -657,7 +779,7 @@ export default function Login() {
                 disabled={loading}
               >
 
-                पासवर्ड विसरलात?
+                {labels[language].forgot}
 
               </button>
 
@@ -675,10 +797,10 @@ export default function Login() {
             >
 
               {loading
-                ? "प्रक्रिया सुरू आहे..."
+                ? labels[language].loginLoading
                 : role === "user"
-                ? "नागरिक लॉगिन"
-                : "अधिकारी लॉगिन"}
+                ? labels[language].loginCitizen
+                : labels[language].loginOfficer}
 
             </button>
 
@@ -693,7 +815,7 @@ export default function Login() {
 
             <div className="register-text">
 
-              नवीन नागरिक खाते?
+              {labels[language].registerText}
 
               <button
                 type="button"
@@ -706,7 +828,7 @@ export default function Login() {
                 }}
               >
 
-                नोंदणी करा
+                {labels[language].registerLink}
 
               </button>
 
@@ -725,7 +847,7 @@ export default function Login() {
 
               <ShieldCheck size={16} />
 
-              अधिकृत नगरपालिका अधिकारीांसाठी
+              {labels[language].securityText}
 
             </div>
 
@@ -740,7 +862,7 @@ export default function Login() {
 
             <ShieldCheck size={14} />
 
-            सुरक्षित आणि संरक्षित लॉगिन
+            {labels[language].secure}
 
           </div>
 
@@ -768,29 +890,29 @@ export default function Login() {
 
           <Feature
             icon={<FileCheck2 />}
-            title="विकास निरीक्षण"
-            subtitle="Phase-wise Monitoring"
+            title={labels[language].feature1}
+            subtitle={labels[language].feature1Sub}
           />
 
 
           <Feature
             icon={<Landmark />}
-            title="शासन पारदर्शकता"
-            subtitle="Governance Transparency"
+            title={labels[language].feature2}
+            subtitle={labels[language].feature2Sub}
           />
 
 
           <Feature
             icon={<Users />}
-            title="नागरिक सहभाग"
-            subtitle="Citizen Participation"
+            title={labels[language].feature3}
+            subtitle={labels[language].feature3Sub}
           />
 
 
           <Feature
             icon={<ShieldCheck />}
-            title="उत्तरदायित्व"
-            subtitle="Accountability"
+            title={labels[language].feature4}
+            subtitle={labels[language].feature4Sub}
           />
 
         </div>
@@ -805,12 +927,12 @@ export default function Login() {
       <footer className="bottom-footer">
 
         <div>
-          माझं शहर • माझी जबाबदारी • माझा विकास
+          {labels[language].footer}
         </div>
 
 
         <div>
-          SKH012 • Development Monitoring & Governance System
+          {labels[language].footer2}
         </div>
 
       </footer>

@@ -9,8 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@rsuite/charts": "^6.0.0",
     "@supabase/supabase-js": "^2.112.4",
     "@vitejs/plugin-react": "latest",
+    "frappe-gantt": "^1.2.2",
+    "piexifjs": "^1.0.6",
     "react": "latest",
     "react-dom": "latest",
     "react-router-dom": "^7.18.3",

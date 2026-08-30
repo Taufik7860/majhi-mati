@@ -6,6 +6,7 @@ import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import municipalRoutes from './routes/municipalRoutes.js';
+import supportRoutes from './routes/supportRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -23,6 +24,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/user', userRoutes);
 app.use('/api/v1/municipal', municipalRoutes);
+app.use('/api/v1/support', supportRoutes);
 
 app.get('/', (req, res) => {
   res.json({ status: 'API Online', message: 'Majhi Mati Engine Active' });
