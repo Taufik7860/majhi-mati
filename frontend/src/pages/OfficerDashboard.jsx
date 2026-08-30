@@ -11,11 +11,11 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
-  AlertTriangle,
   MapPin,
   TrendingUp,
   FileText,
   BarChart3,
+  AlertTriangle,
 } from "lucide-react";
 
 import { supabase } from "../lib/supabase";
@@ -44,9 +44,7 @@ const INITIAL_PROJECTS = [
     titleEn: "Solar Street Light Installation Project",
     location: "Kopargaon - Ward 3",
     budget: 1250000,
-
     lifecycleStage: "Tender / Contract",
-
     priority: "High Priority",
 
     decisionReason:
@@ -70,8 +68,6 @@ const INITIAL_PROJECTS = [
         cost: 200000,
       },
     ],
-
-    /* GANTT DATA */
 
     phases: [
       {
@@ -139,9 +135,7 @@ const INITIAL_PROJECTS = [
     titleEn: "Main Road Concrete Paving Phase 1",
     location: "Kopargaon - Ward 5",
     budget: 4500000,
-
     lifecycleStage: "Administrative Approval",
-
     priority: "High Priority",
 
     decisionReason:
@@ -228,12 +222,100 @@ const INITIAL_PROJECTS = [
 ];
 
 /* =========================================================
+   SECURITY HELPERS
+========================================================= */
+
+/**
+ * Escape text before placing user-controlled values inside
+ * an HTML document.
+ */
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+/**
+ * Escape a CSV field according to RFC-style CSV rules.
+ */
+function escapeCsv(value) {
+  const stringValue = String(value ?? "");
+  return `"${stringValue.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Keep progress safely between 0 and 100.
+ */
+function sanitizeProgress(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, Math.round(number)));
+}
+
+/**
+ * Validate allowed lifecycle stage.
+ */
+function sanitizeLifecycleStage(value) {
+  if (LIFECYCLE_STAGES.includes(value)) {
+    return value;
+  }
+
+  return LIFECYCLE_STAGES[0];
+}
+
+/**
+ * Validate allowed priority.
+ */
+function sanitizePriority(value) {
+  const allowed = [
+    "High Priority",
+    "Medium Priority",
+    "Low Priority",
+  ];
+
+  return allowed.includes(value)
+    ? value
+    : "Medium Priority";
+}
+
+/**
+ * Validate complaint status.
+ */
+function getComplaintStatus(status) {
+  const normalized = String(status || "new").toLowerCase();
+
+  if (normalized === "in_progress") {
+    return "in_progress";
+  }
+
+  if (normalized === "resolved") {
+    return "resolved";
+  }
+
+  return "new";
+}
+
+/* =========================================================
    DATE HELPERS
 ========================================================= */
 
 function getDateDifference(start, end) {
   const startDate = new Date(start);
   const endDate = new Date(end);
+
+  if (
+    Number.isNaN(startDate.getTime()) ||
+    Number.isNaN(endDate.getTime())
+  ) {
+    return 1;
+  }
 
   return Math.max(
     1,
@@ -245,7 +327,13 @@ function getDateDifference(start, end) {
 }
 
 function formatDate(date) {
-  return new Date(date).toLocaleDateString("en-IN", {
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "Invalid date";
+  }
+
+  return parsed.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -253,14 +341,16 @@ function formatDate(date) {
 }
 
 /* =========================================================
-   GANTT CHART COMPONENT
+   GANTT CHART
 ========================================================= */
 
 function ProjectGantt({ project }) {
   const phases = project?.phases || [];
 
   const projectStart = useMemo(() => {
-    if (!phases.length) return new Date();
+    if (!phases.length) {
+      return new Date();
+    }
 
     return new Date(
       Math.min(
@@ -272,7 +362,9 @@ function ProjectGantt({ project }) {
   }, [phases]);
 
   const projectEnd = useMemo(() => {
-    if (!phases.length) return new Date();
+    if (!phases.length) {
+      return new Date();
+    }
 
     return new Date(
       Math.max(
@@ -289,12 +381,20 @@ function ProjectGantt({ project }) {
   );
 
   const getLeft = (start) => {
+    const startTime = new Date(start).getTime();
+
+    if (!Number.isFinite(startTime)) {
+      return "0%";
+    }
+
     const difference =
-      (new Date(start).getTime() -
-        projectStart.getTime()) /
+      (startTime - projectStart.getTime()) /
       (1000 * 60 * 60 * 24);
 
-    return `${(difference / totalDays) * 100}%`;
+    return `${Math.max(
+      0,
+      (difference / totalDays) * 100
+    )}%`;
   };
 
   const getWidth = (start, end) => {
@@ -339,8 +439,6 @@ function ProjectGantt({ project }) {
       </div>
 
       <div style={styles.ganttBody}>
-        {/* HEADER */}
-
         <div style={styles.ganttTimelineHeader}>
           <div style={styles.phaseNameHeader}>
             Project Phase
@@ -356,8 +454,6 @@ function ProjectGantt({ project }) {
             </span>
           </div>
         </div>
-
-        {/* PHASE ROWS */}
 
         {phases.map((phase) => (
           <div
@@ -390,12 +486,17 @@ function ProjectGantt({ project }) {
                 <div
                   style={{
                     ...styles.ganttProgress,
-                    width: `${phase.progress}%`,
+                    width: `${sanitizeProgress(
+                      phase.progress
+                    )}%`,
                   }}
                 />
 
                 <span style={styles.ganttBarText}>
-                  {phase.progress}%
+                  {sanitizeProgress(
+                    phase.progress
+                  )}
+                  %
                 </span>
               </div>
             </div>
@@ -411,7 +512,7 @@ function ProjectGantt({ project }) {
 
         <div>
           <strong>Overall Progress:</strong>{" "}
-          {project.progress}%
+          {sanitizeProgress(project.progress)}%
         </div>
       </div>
     </div>
@@ -478,72 +579,212 @@ export default function OfficerDashboard() {
     useState(null);
 
   const [selectedProjectId, setSelectedProjectId] =
-    useState(INITIAL_PROJECTS[0].id);
+    useState(INITIAL_PROJECTS[0]?.id || null);
 
   const [editFormData, setEditFormData] =
     useState({});
 
+  const [loadingComplaints, setLoadingComplaints] =
+    useState(true);
+
+  const [authChecking, setAuthChecking] =
+    useState(true);
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
   /* =====================================================
-     LOAD LOGGED IN USER
+     SECURE AUTHENTICATION CHECK
   ===================================================== */
 
   useEffect(() => {
-    const userData =
-      localStorage.getItem("user");
+    let mounted = true;
 
-    if (!userData) {
-      navigate("/login");
-      return;
-    }
+    const verifyOfficer = async () => {
+      try {
+        setAuthChecking(true);
 
-    try {
-      const parsed = JSON.parse(userData);
+        /**
+         * IMPORTANT:
+         * Do not trust localStorage as the authentication
+         * authority. Supabase Auth session is checked here.
+         */
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
 
-      const role = String(
-        parsed.role || ""
-      ).toLowerCase();
+        if (error || !user) {
+          if (mounted) {
+            navigate("/login", {
+              replace: true,
+            });
+          }
 
-      const officerRoles = [
-        "officer",
-        "municipal_officer",
-        "municipal_admin",
-        "super_admin",
-      ];
+          return;
+        }
 
-      if (!officerRoles.includes(role)) {
-        navigate("/citizen/dashboard");
-        return;
+        /**
+         * The role should ideally come from Supabase
+         * user metadata or, preferably, a protected
+         * profiles/roles table with RLS.
+         *
+         * We only use localStorage as a UI compatibility
+         * fallback. It MUST NOT be considered database
+         * authorization.
+         */
+        let localUser = null;
+
+        try {
+          const stored =
+            localStorage.getItem("user");
+
+          if (stored) {
+            localUser = JSON.parse(stored);
+          }
+        } catch {
+          localUser = null;
+        }
+
+        const metadataRole =
+          user.user_metadata?.role;
+
+        const localRole =
+          localUser?.role;
+
+        const role = String(
+          metadataRole || localRole || ""
+        ).toLowerCase();
+
+        const officerRoles = [
+          "officer",
+          "municipal_officer",
+          "municipal_admin",
+          "super_admin",
+        ];
+
+        if (!officerRoles.includes(role)) {
+          if (mounted) {
+            navigate("/citizen/dashboard", {
+              replace: true,
+            });
+          }
+
+          return;
+        }
+
+        if (mounted) {
+          setOfficerName(
+            user.user_metadata?.full_name ||
+              localUser?.full_name ||
+              "Municipal Officer"
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Authentication verification failed:",
+          error
+        );
+
+        if (mounted) {
+          navigate("/login", {
+            replace: true,
+          });
+        }
+      } finally {
+        if (mounted) {
+          setAuthChecking(false);
+        }
       }
+    };
 
-      if (parsed.full_name) {
-        setOfficerName(parsed.full_name);
-      }
-    } catch (error) {
-      console.error(
-        "User parsing error:",
-        error
-      );
+    verifyOfficer();
 
-      navigate("/login");
-    }
+    return () => {
+      mounted = false;
+    };
   }, [navigate]);
 
+  /* =====================================================
+     LOAD CITIZEN COMPLAINTS
+  ===================================================== */
+
   useEffect(() => {
+    let mounted = true;
+
     const fetchComplaints = async () => {
-      const { data, error } = await supabase
-        .from("citizen_complaints")
-        .select("*")
-        .order("created_at", { ascending: false });
+      try {
+        setLoadingComplaints(true);
+        setErrorMessage("");
 
-      if (error) {
-        console.error("Complaint fetch error:", error);
-        return;
+        /**
+         * Supabase RLS MUST protect this table.
+         *
+         * Frontend filtering is NOT security.
+         */
+        const {
+          data,
+          error,
+        } = await supabase
+          .from("citizen_complaints")
+          .select(
+            [
+              "id",
+              "token",
+              "citizen_name",
+              "subject",
+              "description",
+              "status",
+              "created_at",
+              "uploaded_file_name",
+              "uploaded_file_url",
+            ].join(",")
+          )
+          .order("created_at", {
+            ascending: false,
+          });
+
+        if (error) {
+          console.error(
+            "Complaint fetch error:",
+            error
+          );
+
+          if (mounted) {
+            setErrorMessage(
+              "नागरिक तक्रारी लोड करता आल्या नाहीत."
+            );
+          }
+
+          return;
+        }
+
+        if (mounted) {
+          setCitizenComplaints(data || []);
+        }
+      } catch (error) {
+        console.error(
+          "Unexpected complaint error:",
+          error
+        );
+
+        if (mounted) {
+          setErrorMessage(
+            "डेटा लोड करताना अनपेक्षित त्रुटी आली."
+          );
+        }
+      } finally {
+        if (mounted) {
+          setLoadingComplaints(false);
+        }
       }
-
-      setCitizenComplaints(data || []);
     };
 
     fetchComplaints();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   /* =====================================================
@@ -558,11 +799,17 @@ export default function OfficerDashboard() {
         "Logout error:",
         error
       );
+    } finally {
+      /**
+       * Remove only application compatibility data.
+       * Supabase Auth remains the actual auth authority.
+       */
+      localStorage.removeItem("user");
+
+      navigate("/login", {
+        replace: true,
+      });
     }
-
-    localStorage.removeItem("user");
-
-    navigate("/login");
   };
 
   /* =====================================================
@@ -570,20 +817,28 @@ export default function OfficerDashboard() {
   ===================================================== */
 
   const startEditing = (project) => {
+    if (!project) {
+      return;
+    }
+
     setEditingProjectId(project.id);
 
     setEditFormData({
       lifecycleStage:
-        project.lifecycleStage,
+        sanitizeLifecycleStage(
+          project.lifecycleStage
+        ),
 
       priority:
-        project.priority,
+        sanitizePriority(project.priority),
 
       decisionReason:
-        project.decisionReason,
+        String(
+          project.decisionReason || ""
+        ).slice(0, 2000),
 
       progress:
-        project.progress,
+        sanitizeProgress(project.progress),
     });
   };
 
@@ -592,18 +847,47 @@ export default function OfficerDashboard() {
   ===================================================== */
 
   const saveDecision = (id) => {
+    if (!id) {
+      return;
+    }
+
+    const sanitizedData = {
+      lifecycleStage:
+        sanitizeLifecycleStage(
+          editFormData.lifecycleStage
+        ),
+
+      priority:
+        sanitizePriority(
+          editFormData.priority
+        ),
+
+      decisionReason:
+        String(
+          editFormData.decisionReason || ""
+        )
+          .trim()
+          .slice(0, 2000),
+
+      progress:
+        sanitizeProgress(
+          editFormData.progress
+        ),
+    };
+
     setProjects((currentProjects) =>
       currentProjects.map((project) =>
         project.id === id
           ? {
               ...project,
-              ...editFormData,
+              ...sanitizedData,
             }
           : project
       )
     );
 
     setEditingProjectId(null);
+    setEditFormData({});
 
     alert(
       "प्रकल्प निर्णय आणि प्रगती यशस्वीरीत्या अपडेट झाली!"
@@ -611,80 +895,132 @@ export default function OfficerDashboard() {
   };
 
   /* =====================================================
-     WORD DOWNLOAD
+     WORD DOCUMENT DOWNLOAD
   ===================================================== */
 
   const downloadWordDoc = (project) => {
+    if (!project) {
+      return;
+    }
+
+    const safeTitleMr = escapeHtml(
+      project.titleMr
+    );
+
+    const safeTitleEn = escapeHtml(
+      project.titleEn
+    );
+
+    const safeLocation = escapeHtml(
+      project.location
+    );
+
+    const safeLifecycleStage =
+      escapeHtml(
+        project.lifecycleStage
+      );
+
+    const safePriority = escapeHtml(
+      project.priority
+    );
+
+    const safeDecisionReason =
+      escapeHtml(
+        project.decisionReason
+      );
+
+    const safeContractor = escapeHtml(
+      project.contractor
+    );
+
+    const safeProgress =
+      sanitizeProgress(project.progress);
+
+    const phases = Array.isArray(
+      project.phases
+    )
+      ? project.phases
+      : [];
+
+    const phaseHtml = phases
+      .map(
+        (phase) => `
+          <li>
+            <strong>${escapeHtml(
+              phase.name
+            )}</strong>
+            -
+            ${escapeHtml(
+              phase.start
+            )}
+            to
+            ${escapeHtml(
+              phase.end
+            )}
+            -
+            ${sanitizeProgress(
+              phase.progress
+            )}%
+          </li>
+        `
+      )
+      .join("");
+
     const content = `
+<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>${project.titleEn}</title>
+<title>${safeTitleEn}</title>
 </head>
 
 <body>
 
-<h1>${project.titleMr}</h1>
+<h1>${safeTitleMr}</h1>
 
-<h2>${project.titleEn}</h2>
+<h2>${safeTitleEn}</h2>
 
 <p>
 <strong>Location:</strong>
-${project.location}
+${safeLocation}
 </p>
 
 <p>
 <strong>Budget:</strong>
-₹${project.budget.toLocaleString(
-      "en-IN"
-    )}
+₹${Number(
+      project.budget || 0
+    ).toLocaleString("en-IN")}
 </p>
 
 <p>
 <strong>Lifecycle Stage:</strong>
-${project.lifecycleStage}
+${safeLifecycleStage}
 </p>
 
 <p>
 <strong>Priority:</strong>
-${project.priority}
+${safePriority}
 </p>
 
 <p>
 <strong>Decision Reason:</strong>
-${project.decisionReason}
+${safeDecisionReason}
 </p>
 
 <p>
 <strong>Progress:</strong>
-${project.progress}%
+${safeProgress}%
 </p>
 
 <p>
 <strong>Contractor:</strong>
-${project.contractor}
+${safeContractor}
 </p>
 
 <h2>Project Phases</h2>
 
 <ul>
-
-${project.phases
-  .map(
-    (phase) => `
-<li>
-<strong>${phase.name}</strong>
--
-${phase.start}
-to
-${phase.end}
--
-${phase.progress}%
-</li>
-`
-  )
-  .join("")}
-
+${phaseHtml}
 </ul>
 
 </body>
@@ -706,11 +1042,20 @@ ${phase.progress}%
 
     anchor.href = url;
 
-    anchor.download = `${project.titleEn}_Official_Report.doc`;
+    anchor.download = `${String(
+      project.titleEn || "Project"
+    ).replace(
+      /[^a-zA-Z0-9-_]/g,
+      "_"
+    )}_Official_Report.doc`;
 
+    document.body.appendChild(anchor);
     anchor.click();
+    document.body.removeChild(anchor);
 
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 1000);
   };
 
   /* =====================================================
@@ -718,19 +1063,40 @@ ${phase.progress}%
   ===================================================== */
 
   const downloadBudgetCSV = (project) => {
+    if (!project) {
+      return;
+    }
+
     let csv =
       "Budget Head,Cost (INR)\n";
 
-    project.budgetBreakdown.forEach(
-      (row) => {
-        csv += `"${row.item}",${row.cost}\n`;
-      }
-    );
+    const breakdown =
+      Array.isArray(
+        project.budgetBreakdown
+      )
+        ? project.budgetBreakdown
+        : [];
 
-    csv += `"Total Budget",${project.budget}\n`;
+    breakdown.forEach((row) => {
+      csv += `${escapeCsv(
+        row.item
+      )},${Number(
+        row.cost || 0
+      )}\n`;
+    });
 
+    csv += `${escapeCsv(
+      "Total Budget"
+    )},${Number(
+      project.budget || 0
+    )}\n`;
+
+    /**
+     * UTF-8 BOM helps Excel display Marathi
+     * correctly.
+     */
     const blob = new Blob(
-      [csv],
+      ["\ufeff", csv],
       {
         type: "text/csv;charset=utf-8;",
       }
@@ -744,11 +1110,20 @@ ${phase.progress}%
 
     anchor.href = url;
 
-    anchor.download = `${project.titleEn}_Budget.csv`;
+    anchor.download = `${String(
+      project.titleEn || "Project"
+    ).replace(
+      /[^a-zA-Z0-9-_]/g,
+      "_"
+    )}_Budget.csv`;
 
+    document.body.appendChild(anchor);
     anchor.click();
+    document.body.removeChild(anchor);
 
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 1000);
   };
 
   /* =====================================================
@@ -758,16 +1133,24 @@ ${phase.progress}%
   const filteredProjects =
     projects.filter((project) => {
       const search =
-        searchQuery.toLowerCase();
+        searchQuery.trim().toLowerCase();
+
+      if (!search) {
+        return true;
+      }
 
       return (
-        project.titleMr.includes(
-          searchQuery
-        ) ||
-        project.titleEn
+        String(
+          project.titleMr || ""
+        ).includes(searchQuery.trim()) ||
+        String(
+          project.titleEn || ""
+        )
           .toLowerCase()
           .includes(search) ||
-        project.location
+        String(
+          project.location || ""
+        )
           .toLowerCase()
           .includes(search)
       );
@@ -776,7 +1159,8 @@ ${phase.progress}%
   const selectedProject =
     projects.find(
       (project) =>
-        project.id === selectedProjectId
+        project.id ===
+        selectedProjectId
     ) || projects[0];
 
   /* =====================================================
@@ -805,11 +1189,32 @@ ${phase.progress}%
       ? Math.round(
           projects.reduce(
             (sum, project) =>
-              sum + project.progress,
+              sum +
+              sanitizeProgress(
+                project.progress
+              ),
             0
           ) / projects.length
         )
       : 0;
+
+  /* =====================================================
+     AUTH LOADING
+  ===================================================== */
+
+  if (authChecking) {
+    return (
+      <div style={styles.loadingPage}>
+        <div style={styles.loadingCard}>
+          <Building2 size={28} />
+          <h2>Officer Portal</h2>
+          <p>
+            Authentication तपासत आहे...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   /* =====================================================
      UI
@@ -817,9 +1222,7 @@ ${phase.progress}%
 
   return (
     <div style={styles.page}>
-      {/* =================================================
-          HEADER
-      ================================================= */}
+      {/* HEADER */}
 
       <header style={styles.header}>
         <div style={styles.headerLeft}>
@@ -853,19 +1256,17 @@ ${phase.progress}%
           </div>
 
           <button
+            type="button"
             onClick={handleLogout}
             style={styles.logoutBtn}
           >
             <LogOut size={15} />
-
             लॉगआउट
           </button>
         </div>
       </header>
 
-      {/* =================================================
-          PAGE INTRO
-      ================================================= */}
+      {/* HERO */}
 
       <section style={styles.hero}>
         <div>
@@ -889,9 +1290,7 @@ ${phase.progress}%
         </div>
       </section>
 
-      {/* =================================================
-          METRICS
-      ================================================= */}
+      {/* METRICS */}
 
       <section style={styles.metricsContainer}>
         <MetricCard
@@ -928,11 +1327,11 @@ ${phase.progress}%
       </section>
 
       <main style={styles.content}>
-        {/* =================================================
-            PROJECT SELECTOR
-        ================================================= */}
+        {/* PROJECT SELECTOR */}
 
-        <section style={styles.projectSelectorCard}>
+        <section
+          style={styles.projectSelectorCard}
+        >
           <div>
             <div style={styles.sectionEyebrow}>
               PROJECT TIMELINE
@@ -942,7 +1341,11 @@ ${phase.progress}%
               Phase-wise Gantt Chart
             </h2>
 
-            <p style={styles.sectionDescription}>
+            <p
+              style={
+                styles.sectionDescription
+              }
+            >
               प्रकल्पाच्या प्रत्येक टप्प्याची
               सुरुवात, समाप्ती आणि प्रगती
               एका timeline मध्ये पहा.
@@ -950,7 +1353,9 @@ ${phase.progress}%
           </div>
 
           <select
-            value={selectedProjectId}
+            value={
+              selectedProjectId || ""
+            }
             onChange={(e) =>
               setSelectedProjectId(
                 Number(e.target.value)
@@ -970,9 +1375,7 @@ ${phase.progress}%
           </select>
         </section>
 
-        {/* =================================================
-            GANTT
-        ================================================= */}
+        {/* GANTT */}
 
         {selectedProject && (
           <ProjectGantt
@@ -980,9 +1383,7 @@ ${phase.progress}%
           />
         )}
 
-        {/* =================================================
-            PROJECT MANAGEMENT
-        ================================================= */}
+        {/* PROJECT MANAGEMENT */}
 
         <section style={styles.tableCard}>
           <div style={styles.toolbar}>
@@ -1014,10 +1415,14 @@ ${phase.progress}%
                 value={searchQuery}
                 onChange={(e) =>
                   setSearchQuery(
-                    e.target.value
+                    e.target.value.slice(
+                      0,
+                      100
+                    )
                   )
                 }
                 style={styles.searchInput}
+                maxLength={100}
               />
             </div>
           </div>
@@ -1045,8 +1450,7 @@ ${phase.progress}%
                   <th
                     style={{
                       ...styles.th,
-                      textAlign:
-                        "right",
+                      textAlign: "right",
                     }}
                   >
                     कृती
@@ -1059,9 +1463,7 @@ ${phase.progress}%
                   (project) => (
                     <tr
                       key={project.id}
-                      style={
-                        styles.tableRow
-                      }
+                      style={styles.tableRow}
                     >
                       {/* PROJECT */}
 
@@ -1079,9 +1481,7 @@ ${phase.progress}%
                             styles.projectEnglish
                           }
                         >
-                          {
-                            project.titleEn
-                          }
+                          {project.titleEn}
                         </div>
 
                         <div
@@ -1089,13 +1489,9 @@ ${phase.progress}%
                             styles.location
                           }
                         >
-                          <MapPin
-                            size={13}
-                          />
+                          <MapPin size={13} />
 
-                          {
-                            project.location
-                          }
+                          {project.location}
                         </div>
 
                         <div
@@ -1104,7 +1500,10 @@ ${phase.progress}%
                           }
                         >
                           ₹
-                          {project.budget.toLocaleString(
+                          {Number(
+                            project.budget ||
+                              0
+                          ).toLocaleString(
                             "en-IN"
                           )}
                         </div>
@@ -1121,12 +1520,14 @@ ${phase.progress}%
                             }
                             onChange={(e) =>
                               setEditFormData(
-                                {
-                                  ...editFormData,
+                                (current) => ({
+                                  ...current,
                                   lifecycleStage:
-                                    e.target
-                                      .value,
-                                }
+                                    sanitizeLifecycleStage(
+                                      e.target
+                                        .value
+                                    ),
+                                })
                               )
                             }
                             style={
@@ -1162,8 +1563,7 @@ ${phase.progress}%
                       <td
                         style={{
                           ...styles.td,
-                          minWidth:
-                            "270px",
+                          minWidth: "270px",
                         }}
                       >
                         {editingProjectId ===
@@ -1175,12 +1575,14 @@ ${phase.progress}%
                               }
                               onChange={(e) =>
                                 setEditFormData(
-                                  {
-                                    ...editFormData,
+                                  (current) => ({
+                                    ...current,
                                     priority:
-                                      e.target
-                                        .value,
-                                  }
+                                      sanitizePriority(
+                                        e.target
+                                          .value
+                                      ),
+                                  })
                                 )
                               }
                               style={{
@@ -1204,17 +1606,21 @@ ${phase.progress}%
 
                             <textarea
                               rows={4}
+                              maxLength={2000}
                               value={
-                                editFormData.decisionReason
+                                editFormData.decisionReason ||
+                                ""
                               }
                               onChange={(e) =>
                                 setEditFormData(
-                                  {
-                                    ...editFormData,
+                                  (current) => ({
+                                    ...current,
                                     decisionReason:
-                                      e.target
-                                        .value,
-                                  }
+                                      e.target.value.slice(
+                                        0,
+                                        2000
+                                      ),
+                                  })
                                 )
                               }
                               placeholder="प्रकल्प प्राधान्याचे कारण..."
@@ -1258,25 +1664,20 @@ ${phase.progress}%
                               type="number"
                               min="0"
                               max="100"
+                              step="1"
                               value={
                                 editFormData.progress
                               }
                               onChange={(e) =>
                                 setEditFormData(
-                                  {
-                                    ...editFormData,
+                                  (current) => ({
+                                    ...current,
                                     progress:
-                                      Math.min(
-                                        100,
-                                        Math.max(
-                                          0,
-                                          Number(
-                                            e.target
-                                              .value
-                                          )
-                                        )
+                                      sanitizeProgress(
+                                        e.target
+                                          .value
                                       ),
-                                  }
+                                  })
                                 )
                               }
                               style={
@@ -1284,9 +1685,7 @@ ${phase.progress}%
                               }
                             />
 
-                            <span>
-                              %
-                            </span>
+                            <span>%</span>
                           </div>
                         ) : (
                           <div
@@ -1300,19 +1699,17 @@ ${phase.progress}%
                               }
                             >
                               <strong>
-                                {
+                                {sanitizeProgress(
                                   project.progress
-                                }
+                                )}
                                 %
                               </strong>
 
                               <span>
-                                {
-                                  project.progress >=
-                                  100
-                                    ? "Complete"
-                                    : "In progress"
-                                }
+                                {project.progress >=
+                                100
+                                  ? "Complete"
+                                  : "In progress"}
                               </span>
                             </div>
 
@@ -1324,7 +1721,9 @@ ${phase.progress}%
                               <div
                                 style={{
                                   ...styles.progressFill,
-                                  width: `${project.progress}%`,
+                                  width: `${sanitizeProgress(
+                                    project.progress
+                                  )}%`,
                                 }}
                               />
                             </div>
@@ -1337,13 +1736,13 @@ ${phase.progress}%
                       <td
                         style={{
                           ...styles.td,
-                          textAlign:
-                            "right",
+                          textAlign: "right",
                         }}
                       >
                         {editingProjectId ===
                         project.id ? (
                           <button
+                            type="button"
                             onClick={() =>
                               saveDecision(
                                 project.id
@@ -1354,7 +1753,6 @@ ${phase.progress}%
                             }
                           >
                             <Save size={14} />
-
                             सेव्ह
                           </button>
                         ) : (
@@ -1364,6 +1762,7 @@ ${phase.progress}%
                             }
                           >
                             <button
+                              type="button"
                               onClick={() =>
                                 startEditing(
                                   project
@@ -1373,14 +1772,12 @@ ${phase.progress}%
                                 styles.editBtn
                               }
                             >
-                              <Edit3
-                                size={14}
-                              />
-
+                              <Edit3 size={14} />
                               निर्णय
                             </button>
 
                             <button
+                              type="button"
                               onClick={() =>
                                 downloadWordDoc(
                                   project
@@ -1393,11 +1790,11 @@ ${phase.progress}%
                               <Download
                                 size={14}
                               />
-
                               Word
                             </button>
 
                             <button
+                              type="button"
                               onClick={() =>
                                 downloadBudgetCSV(
                                   project
@@ -1410,7 +1807,6 @@ ${phase.progress}%
                               <Download
                                 size={14}
                               />
-
                               CSV
                             </button>
                           </div>
@@ -1421,14 +1817,46 @@ ${phase.progress}%
                 )}
               </tbody>
             </table>
+
+            {filteredProjects.length === 0 && (
+              <div style={styles.noResults}>
+                <Search size={24} />
+                <p>
+                  कोणताही प्रकल्प सापडला नाही.
+                </p>
+              </div>
+            )}
           </div>
         </section>
 
-        {/* =================================================
-            CITIZEN COMPLAINTS
-        ================================================= */}
+        {/* SECURITY / ERROR MESSAGE */}
 
-        <section style={styles.tableCard}>
+        {errorMessage && (
+          <section
+            style={styles.errorCard}
+          >
+            <AlertTriangle size={21} />
+
+            <div>
+              <strong>
+                डेटा लोड करण्यात समस्या
+              </strong>
+
+              <p>
+                {errorMessage}
+              </p>
+            </div>
+          </section>
+        )}
+
+        {/* CITIZEN COMPLAINTS */}
+
+        <section
+          style={{
+            ...styles.tableCard,
+            marginTop: "20px",
+          }}
+        >
           <div style={styles.toolbar}>
             <div>
               <div style={styles.sectionEyebrow}>
@@ -1440,82 +1868,217 @@ ${phase.progress}%
               </h2>
 
               <p style={styles.tableSubtitle}>
-                All complaint data received from citizens is synced from Supabase.
+                Citizen complaint data is
+                retrieved securely through
+                Supabase.
               </p>
             </div>
           </div>
 
           <div style={styles.complaintList}>
-            {citizenComplaints.length === 0 ? (
-              <div style={styles.emptyComplaints}>
-                <div style={styles.emptyIcon}>📋</div>
-                <p style={styles.emptyText}>No citizen complaints received yet.</p>
-                <p style={styles.emptySubtext}>Complaints will appear here when citizens submit them.</p>
+            {loadingComplaints ? (
+              <div
+                style={
+                  styles.emptyComplaints
+                }
+              >
+                <Clock3 size={32} />
+                <p
+                  style={
+                    styles.emptyText
+                  }
+                >
+                  तक्रारी लोड होत आहेत...
+                </p>
+              </div>
+            ) : citizenComplaints.length ===
+              0 ? (
+              <div
+                style={
+                  styles.emptyComplaints
+                }
+              >
+                <div
+                  style={styles.emptyIcon}
+                >
+                  📋
+                </div>
+
+                <p
+                  style={
+                    styles.emptyText
+                  }
+                >
+                  No citizen complaints
+                  received yet.
+                </p>
+
+                <p
+                  style={
+                    styles.emptySubtext
+                  }
+                >
+                  Complaints will appear here
+                  when citizens submit them.
+                </p>
               </div>
             ) : (
-              citizenComplaints.map((complaint) => (
-                <div key={complaint.id} style={styles.complaintCard}>
-                  {/* Header with token and status */}
-                  <div style={styles.complaintHeader}>
-                    <div style={styles.complaintTokenSection}>
-                      <div style={styles.complaintToken}>{complaint.token}</div>
-                      <div style={styles.complaintName}>{complaint.citizen_name}</div>
-                    </div>
+              citizenComplaints.map(
+                (complaint) => {
+                  const status =
+                    getComplaintStatus(
+                      complaint.status
+                    );
 
-                    <span
-                      style={{
-                        ...styles.statusBadge,
-                        background:
-                          complaint.status === "new"
-                            ? "#dbeafe"
-                            : complaint.status === "in_progress"
-                              ? "#fef3c7"
-                              : "#dcfce7",
-                        color:
-                          complaint.status === "new"
-                            ? "#0c4a6e"
-                            : complaint.status === "in_progress"
-                              ? "#92400e"
-                              : "#166534",
-                      }}
+                  return (
+                    <div
+                      key={complaint.id}
+                      style={
+                        styles.complaintCard
+                      }
                     >
-                      {complaint.status || "new"}
-                    </span>
-                  </div>
+                      {/* HEADER */}
 
-                  {/* Subject */}
-                  <div style={styles.complaintSubject}>{complaint.subject}</div>
-
-                  {/* Description */}
-                  <div style={styles.complaintText}>{complaint.description}</div>
-
-                  {/* Attachment and metadata */}
-                  <div style={styles.complaintFooter}>
-                    <div style={styles.complaintMeta}>
-                      <span style={styles.metaTime}>
-                        📅 {new Date(complaint.created_at).toLocaleString("en-IN")}
-                      </span>
-                      {complaint.uploaded_file_name && (
-                        <a
-                          href={complaint.uploaded_file_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={styles.attachmentLink}
+                      <div
+                        style={
+                          styles.complaintHeader
+                        }
+                      >
+                        <div
+                          style={
+                            styles.complaintTokenSection
+                          }
                         >
-                          📎 {complaint.uploaded_file_name}
-                        </a>
-                      )}
+                          <div
+                            style={
+                              styles.complaintToken
+                            }
+                          >
+                            {String(
+                              complaint.token ||
+                                "NO TOKEN"
+                            )}
+                          </div>
+
+                          <div
+                            style={
+                              styles.complaintName
+                            }
+                          >
+                            {String(
+                              complaint.citizen_name ||
+                                "Citizen"
+                            )}
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            ...styles.statusBadge,
+                            background:
+                              status ===
+                              "new"
+                                ? "#dbeafe"
+                                : status ===
+                                  "in_progress"
+                                ? "#fef3c7"
+                                : "#dcfce7",
+                            color:
+                              status ===
+                              "new"
+                                ? "#0c4a6e"
+                                : status ===
+                                  "in_progress"
+                                ? "#92400e"
+                                : "#166534",
+                          }}
+                        >
+                          {status}
+                        </span>
+                      </div>
+
+                      {/* SUBJECT */}
+
+                      <div
+                        style={
+                          styles.complaintSubject
+                        }
+                      >
+                        {String(
+                          complaint.subject ||
+                            "No subject"
+                        )}
+                      </div>
+
+                      {/* DESCRIPTION */}
+
+                      <div
+                        style={
+                          styles.complaintText
+                        }
+                      >
+                        {String(
+                          complaint.description ||
+                            "No description provided."
+                        )}
+                      </div>
+
+                      {/* FOOTER */}
+
+                      <div
+                        style={
+                          styles.complaintFooter
+                        }
+                      >
+                        <div
+                          style={
+                            styles.complaintMeta
+                          }
+                        >
+                          <span
+                            style={
+                              styles.metaTime
+                            }
+                          >
+                            📅{" "}
+                            {complaint.created_at
+                              ? new Date(
+                                  complaint.created_at
+                                ).toLocaleString(
+                                  "en-IN"
+                                )
+                              : "Unknown date"}
+                          </span>
+
+                          {complaint.uploaded_file_name &&
+                            complaint.uploaded_file_url && (
+                              <a
+                                href={
+                                  complaint.uploaded_file_url
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={
+                                  styles.attachmentLink
+                                }
+                              >
+                                📎{" "}
+                                {
+                                  complaint.uploaded_file_name
+                                }
+                              </a>
+                            )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))
+                  );
+                }
+              )
             )}
           </div>
         </section>
 
-        {/* =================================================
-            TRANSPARENCY NOTICE
-        ================================================= */}
+        {/* TRANSPARENCY NOTICE */}
 
         <section
           style={
@@ -1577,17 +2140,20 @@ function MetricCard({
     purple: "#7c3aed",
   };
 
+  const currentColor =
+    colors[type] || colors.blue;
+
   return (
     <div
       style={{
         ...styles.metricCard,
-        borderTop: `3px solid ${colors[type]}`,
+        borderTop: `3px solid ${currentColor}`,
       }}
     >
       <div
         style={{
           ...styles.metricIcon,
-          color: colors[type],
+          color: currentColor,
         }}
       >
         {icon}
@@ -1603,7 +2169,9 @@ function MetricCard({
         </div>
 
         <div
-          style={styles.metricDescription}
+          style={
+            styles.metricDescription
+          }
         >
           {description}
         </div>
@@ -1626,7 +2194,23 @@ const styles = {
     color: "#0f172a",
   },
 
-  /* HEADER */
+  loadingPage: {
+    minHeight: "100vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#f4f8fb",
+  },
+
+  loadingCard: {
+    padding: "30px",
+    borderRadius: "14px",
+    background: "#fff",
+    border: "1px solid #dbe5ec",
+    textAlign: "center",
+    boxShadow:
+      "0 8px 30px rgba(15,43,72,0.08)",
+  },
 
   header: {
     minHeight: "72px",
@@ -1693,11 +2277,11 @@ const styles = {
   },
 
   logoutBtn: {
-    border: "1px solid rgba(255,255,255,0.12)",
+    border:
+      "1px solid rgba(255,255,255,0.12)",
     background: "#dc2626",
     color: "#fff",
-    padding:
-      "9px 14px",
+    padding: "9px 14px",
     borderRadius: "8px",
     cursor: "pointer",
     display: "flex",
@@ -1707,16 +2291,13 @@ const styles = {
     fontSize: "12px",
   },
 
-  /* HERO */
-
   hero: {
     margin: "25px 32px 0",
     padding: "25px 28px",
     borderRadius: "18px",
     background:
       "linear-gradient(135deg, #ffffff, #f8fbfd)",
-    border:
-      "1px solid #dbe5ec",
+    border: "1px solid #dbe5ec",
     boxShadow:
       "0 8px 30px rgba(15,43,72,0.06)",
     display: "flex",
@@ -1732,8 +2313,7 @@ const styles = {
   },
 
   heroTitle: {
-    margin:
-      "6px 0 7px",
+    margin: "6px 0 7px",
     fontSize: "26px",
     color: "#0f2b48",
   },
@@ -1757,11 +2337,8 @@ const styles = {
     color: "#0284c7",
   },
 
-  /* METRICS */
-
   metricsContainer: {
-    padding:
-      "20px 32px",
+    padding: "20px 32px",
     display: "grid",
     gridTemplateColumns:
       "repeat(4, minmax(0, 1fr))",
@@ -1775,12 +2352,9 @@ const styles = {
     display: "flex",
     gap: "13px",
     alignItems: "center",
-    borderLeft:
-      "1px solid #e2e8f0",
-    borderRight:
-      "1px solid #e2e8f0",
-    borderBottom:
-      "1px solid #e2e8f0",
+    borderLeft: "1px solid #e2e8f0",
+    borderRight: "1px solid #e2e8f0",
+    borderBottom: "1px solid #e2e8f0",
     boxShadow:
       "0 5px 18px rgba(15,43,72,0.05)",
   },
@@ -1818,20 +2392,14 @@ const styles = {
     marginTop: "1px",
   },
 
-  /* CONTENT */
-
   content: {
-    padding:
-      "0 32px 40px",
+    padding: "0 32px 40px",
   },
-
-  /* PROJECT SELECTOR */
 
   projectSelectorCard: {
     marginBottom: "15px",
     background: "#fff",
-    border:
-      "1px solid #dbe5ec",
+    border: "1px solid #dbe5ec",
     borderRadius: "15px",
     padding: "18px 20px",
     display: "flex",
@@ -1848,8 +2416,7 @@ const styles = {
   },
 
   sectionTitle: {
-    margin:
-      "4px 0 2px",
+    margin: "4px 0 2px",
     color: "#0f2b48",
     fontSize: "19px",
   },
@@ -1862,11 +2429,9 @@ const styles = {
 
   projectSelect: {
     minWidth: "300px",
-    border:
-      "1px solid #cbd5e1",
+    border: "1px solid #cbd5e1",
     borderRadius: "9px",
-    padding:
-      "10px 12px",
+    padding: "10px 12px",
     background: "#fff",
     color: "#0f172a",
     outline: "none",
@@ -1874,12 +2439,9 @@ const styles = {
     fontWeight: 600,
   },
 
-  /* GANTT */
-
   ganttCard: {
     background: "#fff",
-    border:
-      "1px solid #dbe5ec",
+    border: "1px solid #dbe5ec",
     borderRadius: "15px",
     marginBottom: "20px",
     overflow: "hidden",
@@ -1888,8 +2450,7 @@ const styles = {
   },
 
   ganttHeader: {
-    padding:
-      "18px 20px",
+    padding: "18px 20px",
     borderBottom:
       "1px solid #e2e8f0",
     display: "flex",
@@ -1935,15 +2496,13 @@ const styles = {
   },
 
   ganttBody: {
-    padding:
-      "18px 20px 10px",
+    padding: "18px 20px 10px",
     overflowX: "auto",
   },
 
   ganttTimelineHeader: {
     display: "grid",
-    gridTemplateColumns:
-      "220px 1fr",
+    gridTemplateColumns: "220px 1fr",
     minWidth: "700px",
     marginBottom: "7px",
   },
@@ -1964,8 +2523,7 @@ const styles = {
 
   ganttRow: {
     display: "grid",
-    gridTemplateColumns:
-      "220px 1fr",
+    gridTemplateColumns: "220px 1fr",
     minWidth: "700px",
     minHeight: "48px",
     borderTop:
@@ -2021,8 +2579,7 @@ const styles = {
   },
 
   ganttFooter: {
-    padding:
-      "12px 20px",
+    padding: "12px 20px",
     background: "#f8fafc",
     borderTop:
       "1px solid #e2e8f0",
@@ -2032,12 +2589,9 @@ const styles = {
     color: "#475569",
   },
 
-  /* TABLE */
-
   tableCard: {
     background: "#fff",
-    border:
-      "1px solid #dbe5ec",
+    border: "1px solid #dbe5ec",
     borderRadius: "15px",
     overflow: "hidden",
     boxShadow:
@@ -2045,8 +2599,7 @@ const styles = {
   },
 
   toolbar: {
-    padding:
-      "19px 20px",
+    padding: "19px 20px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -2056,8 +2609,7 @@ const styles = {
   },
 
   tableTitle: {
-    margin:
-      "4px 0 2px",
+    margin: "4px 0 2px",
     fontSize: "17px",
     color: "#0f2b48",
   },
@@ -2073,10 +2625,8 @@ const styles = {
     alignItems: "center",
     gap: "7px",
     background: "#f8fafc",
-    border:
-      "1px solid #cbd5e1",
-    padding:
-      "8px 11px",
+    border: "1px solid #cbd5e1",
+    padding: "8px 11px",
     borderRadius: "8px",
     minWidth: "220px",
   },
@@ -2095,8 +2645,7 @@ const styles = {
 
   table: {
     width: "100%",
-    borderCollapse:
-      "collapse",
+    borderCollapse: "collapse",
     textAlign: "left",
     minWidth: "1050px",
   },
@@ -2107,8 +2656,7 @@ const styles = {
   },
 
   th: {
-    padding:
-      "12px 13px",
+    padding: "12px 13px",
     fontSize: "10px",
     color: "#475569",
     fontWeight: 800,
@@ -2124,10 +2672,8 @@ const styles = {
   },
 
   td: {
-    padding:
-      "13px",
-    verticalAlign:
-      "top",
+    padding: "13px",
+    verticalAlign: "top",
     fontSize: "11px",
   },
 
@@ -2163,10 +2709,8 @@ const styles = {
     display: "inline-block",
     background: "#e0f2fe",
     color: "#075985",
-    border:
-      "1px solid #bae6fd",
-    padding:
-      "5px 8px",
+    border: "1px solid #bae6fd",
+    padding: "5px 8px",
     borderRadius: "6px",
     fontSize: "9px",
     fontWeight: 800,
@@ -2177,8 +2721,7 @@ const styles = {
     background: "#fef3c7",
     borderRadius: "5px",
     display: "inline-block",
-    padding:
-      "4px 7px",
+    padding: "4px 7px",
     fontSize: "9px",
     fontWeight: 800,
   },
@@ -2192,11 +2735,9 @@ const styles = {
 
   selectInput: {
     width: "100%",
-    padding:
-      "7px 8px",
+    padding: "7px 8px",
     fontSize: "10px",
-    border:
-      "1px solid #cbd5e1",
+    border: "1px solid #cbd5e1",
     borderRadius: "6px",
     outline: "none",
     background: "#fff",
@@ -2204,11 +2745,9 @@ const styles = {
 
   textAreaInput: {
     width: "100%",
-    padding:
-      "8px",
+    padding: "8px",
     fontSize: "10px",
-    border:
-      "1px solid #cbd5e1",
+    border: "1px solid #cbd5e1",
     borderRadius: "6px",
     resize: "vertical",
     outline: "none",
@@ -2240,16 +2779,13 @@ const styles = {
     background:
       "linear-gradient(90deg, #0284c7, #16a34a)",
     borderRadius: "20px",
-    transition:
-      "width 0.3s ease",
+    transition: "width 0.3s ease",
   },
 
   progressInput: {
     width: "55px",
-    padding:
-      "6px",
-    border:
-      "1px solid #cbd5e1",
+    padding: "6px",
+    border: "1px solid #cbd5e1",
     borderRadius: "5px",
   },
 
@@ -2264,8 +2800,7 @@ const styles = {
     background: "#0f2b48",
     color: "#fff",
     border: "none",
-    padding:
-      "7px 9px",
+    padding: "7px 9px",
     borderRadius: "6px",
     fontSize: "9px",
     fontWeight: 700,
@@ -2279,8 +2814,7 @@ const styles = {
     background: "#2563eb",
     color: "#fff",
     border: "none",
-    padding:
-      "7px 9px",
+    padding: "7px 9px",
     borderRadius: "6px",
     fontSize: "9px",
     fontWeight: 700,
@@ -2294,8 +2828,7 @@ const styles = {
     background: "#059669",
     color: "#fff",
     border: "none",
-    padding:
-      "7px 9px",
+    padding: "7px 9px",
     borderRadius: "6px",
     fontSize: "9px",
     fontWeight: 700,
@@ -2309,8 +2842,7 @@ const styles = {
     background: "#16a34a",
     color: "#fff",
     border: "none",
-    padding:
-      "8px 12px",
+    padding: "8px 12px",
     borderRadius: "6px",
     fontSize: "10px",
     fontWeight: 800,
@@ -2320,54 +2852,33 @@ const styles = {
     gap: "5px",
   },
 
-  /* TRANSPARENCY */
-
-  transparencyCard: {
-    marginTop: "18px",
-    padding:
-      "18px 20px",
-    borderRadius: "13px",
-    background:
-      "linear-gradient(135deg, #ecfdf5, #f0fdf4)",
-    border:
-      "1px solid #bbf7d0",
+  noResults: {
+    padding: "35px",
     display: "flex",
-    alignItems: "flex-start",
-    gap: "13px",
-  },
-
-  transparencyIcon: {
-    width: "40px",
-    height: "40px",
-    borderRadius: "10px",
-    background: "#dcfce7",
-    color: "#15803d",
-    display: "flex",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    flexShrink: 0,
+    color: "#94a3b8",
+    gap: "8px",
   },
 
-  transparencyTitle: {
-    margin:
-      "1px 0 5px",
-    fontSize: "14px",
-    color: "#166534",
+  errorCard: {
+    marginTop: "18px",
+    padding: "16px 20px",
+    borderRadius: "12px",
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#991b1b",
+    display: "flex",
+    gap: "12px",
+    alignItems: "flex-start",
   },
-
-  transparencyText: {
-    margin: 0,
-    fontSize: "11px",
-    color: "#3f6212",
-    lineHeight: 1.7,
-  },
-
-  /* COMPLAINTS SECTION */
 
   complaintList: {
-    padding: "0",
+    padding: "16px",
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))",
+    gridTemplateColumns:
+      "repeat(auto-fill, minmax(380px, 1fr))",
     gap: "16px",
   },
 
@@ -2376,11 +2887,8 @@ const styles = {
     border: "1px solid #e2e8f0",
     borderRadius: "12px",
     padding: "16px",
-    boxShadow: "0 2px 8px rgba(15, 43, 72, 0.08)",
-    transition: "all 0.3s ease",
-    ":hover": {
-      boxShadow: "0 8px 20px rgba(15, 43, 72, 0.15)",
-    },
+    boxShadow:
+      "0 2px 8px rgba(15, 43, 72, 0.08)",
   },
 
   complaintHeader: {
@@ -2389,7 +2897,8 @@ const styles = {
     alignItems: "flex-start",
     marginBottom: "12px",
     paddingBottom: "12px",
-    borderBottom: "1px solid #f1f5f9",
+    borderBottom:
+      "1px solid #f1f5f9",
   },
 
   complaintTokenSection: {
@@ -2417,7 +2926,8 @@ const styles = {
     fontSize: "11px",
     fontWeight: "700",
     textTransform: "capitalize",
-    border: "1px solid transparent",
+    border:
+      "1px solid transparent",
     display: "inline-block",
   },
 
@@ -2442,7 +2952,8 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "center",
     paddingTop: "12px",
-    borderTop: "1px solid #f1f5f9",
+    borderTop:
+      "1px solid #f1f5f9",
   },
 
   complaintMeta: {
@@ -2470,11 +2981,6 @@ const styles = {
     gap: "5px",
     padding: "4px 0",
     borderRadius: "4px",
-    transition: "all 0.2s ease",
-    ":hover": {
-      color: "#075985",
-      background: "#f0f9ff",
-    },
   },
 
   emptyComplaints: {
@@ -2494,7 +3000,7 @@ const styles = {
   },
 
   emptyText: {
-    margin: "0",
+    margin: 0,
     fontSize: "14px",
     fontWeight: "600",
     color: "#475569",
@@ -2506,8 +3012,40 @@ const styles = {
     color: "#94a3b8",
   },
 
-  linkStyle: {
-    color: "#0284c7",
-    textDecoration: "none",
+  transparencyCard: {
+    marginTop: "18px",
+    padding: "18px 20px",
+    borderRadius: "13px",
+    background:
+      "linear-gradient(135deg, #ecfdf5, #f0fdf4)",
+    border: "1px solid #bbf7d0",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "13px",
+  },
+
+  transparencyIcon: {
+    width: "40px",
+    height: "40px",
+    borderRadius: "10px",
+    background: "#dcfce7",
+    color: "#15803d",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+
+  transparencyTitle: {
+    margin: "1px 0 5px",
+    fontSize: "14px",
+    color: "#166534",
+  },
+
+  transparencyText: {
+    margin: 0,
+    fontSize: "11px",
+    color: "#3f6212",
+    lineHeight: 1.7,
   },
 };
