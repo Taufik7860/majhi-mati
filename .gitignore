@@ -1,41 +1,34 @@
-# Dependencies
-node_modules/
-frontend/node_modules/
-backend/node_modules/
+If project data is valid:
 
-# Environment variables / secrets
-.env
-.env.*
-!.env.example
+Render normally.
 
-frontend/.env
-frontend/.env.*
-!.env.example
+If project data is invalid:
 
-backend/.env
-backend/.env.*
-!.env.example
+DO NOT show the corrupted value as if it were correct.
 
-# Build output
-dist/
-frontend/dist/
-backend/dist/
-build/
+Show a professional warning:
 
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
+DATA INTEGRITY WARNING
 
-# OS files
-.DS_Store
-Thumbs.db
+Project information could not be verified.
 
-# Editor
-.vscode/
-.idea/
+Problem:
+Progress value is outside the permitted range.
 
-# Temporary files
-*.tmp
-*.temp
+The project should remain visible where safe, but invalid fields must be clearly marked.
+
+
+
+Example:
+
+Project 1 → valid
+Project 2 → corrupted
+Project 3 → valid
+
+Expected:
+
+Project 1 → normal
+Project 2 → Data Integrity Warning
+Project 3 → normal
+
+The application must continue working.
